@@ -39,46 +39,6 @@ static void create_table();
 static void duplicate_name();
 static void insert_keypair();
 
-static void create_table() {
-	char *err_msg = NULL;
-	
-	if ( sqlite3_exec(db, create_keys_table, NULL, NULL, &err_msg) != SQLITE_OK )
-		err_sqlite3("Failed to create keys table", err_msg);
-}
-
-static void duplicate_name() {
-	fprintf(stderr, "Names must be unique. The \"%s\" is already used.\n", name);
-	exit(65);
-}
-
-static void insert_keypair() {
-	sqlite3_stmt *insert;
-	if ( sqlite3_prepare_v2(db, insert_into_keys, strlen(insert_into_keys)+sizeof('\0'), &insert, NULL) != SQLITE_OK )
-		sqlite3_finalize(insert), fail_sqlite3("Failed to prepare insert statement");
-	if ( sqlite3_bind_text(insert, 1, name, strlen(name)+sizeof('\0'), SQLITE_STATIC) != SQLITE_OK )
-		sqlite3_finalize(insert), fail_sqlite3("Failed to bind first parameter to insert statement");
-	if ( sqlite3_bind_blob(insert, 2, pk  , crypto_box_PUBLICKEYBYTES, SQLITE_STATIC) != SQLITE_OK )
-		sqlite3_finalize(insert), fail_sqlite3("Failed to bind second parameter to insert statement");
-	if ( sqlite3_bind_blob(insert, 3, sk  , crypto_box_SECRETKEYBYTES, SQLITE_STATIC) != SQLITE_OK )
-		sqlite3_finalize(insert), fail_sqlite3("Failed to bind third parameter to insert statement");
-	
-        switch ( sqlite3_step(insert) ) {
-		case SQLITE_DONE:
-			sqlite3_finalize(insert);
-			break;
-		
-		case SQLITE_CONSTRAINT:
-			sqlite3_finalize(insert);
-			duplicate_name();
-			break;
-
-		default:
-			sqlite3_finalize(insert);
-			fail_sqlite3("Failed to insert key pair into database");
-			break;
-	}
-}
-
 int main(int argc, const char **argv) {
 	
 	usage(argc);
@@ -173,3 +133,44 @@ static void close_db() {
 	if ( sqlite3_close(db) != SQLITE_OK )
 		fail_sqlite3("Can't close database");
 }
+
+static void create_table() {
+	char *err_msg = NULL;
+	
+	if ( sqlite3_exec(db, create_keys_table, NULL, NULL, &err_msg) != SQLITE_OK )
+		err_sqlite3("Failed to create keys table", err_msg);
+}
+
+static void duplicate_name() {
+	fprintf(stderr, "Names must be unique. The \"%s\" is already used.\n", name);
+	exit(65);
+}
+
+static void insert_keypair() {
+	sqlite3_stmt *insert;
+	if ( sqlite3_prepare_v2(db, insert_into_keys, strlen(insert_into_keys)+sizeof('\0'), &insert, NULL) != SQLITE_OK )
+		sqlite3_finalize(insert), fail_sqlite3("Failed to prepare insert statement");
+	if ( sqlite3_bind_text(insert, 1, name, strlen(name)+sizeof('\0'), SQLITE_STATIC) != SQLITE_OK )
+		sqlite3_finalize(insert), fail_sqlite3("Failed to bind first parameter to insert statement");
+	if ( sqlite3_bind_blob(insert, 2, pk  , crypto_box_PUBLICKEYBYTES, SQLITE_STATIC) != SQLITE_OK )
+		sqlite3_finalize(insert), fail_sqlite3("Failed to bind second parameter to insert statement");
+	if ( sqlite3_bind_blob(insert, 3, sk  , crypto_box_SECRETKEYBYTES, SQLITE_STATIC) != SQLITE_OK )
+		sqlite3_finalize(insert), fail_sqlite3("Failed to bind third parameter to insert statement");
+	
+        switch ( sqlite3_step(insert) ) {
+		case SQLITE_DONE:
+			sqlite3_finalize(insert);
+			break;
+		
+		case SQLITE_CONSTRAINT:
+			sqlite3_finalize(insert);
+			duplicate_name();
+			break;
+
+		default:
+			sqlite3_finalize(insert);
+			fail_sqlite3("Failed to insert key pair into database");
+			break;
+	}
+}
+

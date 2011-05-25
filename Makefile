@@ -3,10 +3,21 @@ NACL_VERSION=20110221
 TMP?=tmp
 LIB?=lib
 BIN?=bin
-INCLUDE?=include
+OUT?=out
+SRC?=src
+INC?=include
 NACL_TMP=$(TMP)/nacl-$(NACL_VERSION)
 
-env:: $(BIN) $(LIB) $(INCLUDE)
+CC=clang
+
+ABI!=if [ -x $(BIN)/okabi ]; then export PATH=$(BIN):$${PATH}; okabi; fi
+CWARN+=-Wall -pedantic
+CINC+=-I$(INC) -I$(INC)/$(ABI)
+CLD+=-L$(LIB)/$(ABI)
+CFLAGS+=-std=c99 $(CWARN) $(CINC)
+LFLAGS+=-static $(CWARN) $(CLD)
+
+env:: $(BIN) $(LIB) $(INC)
 
 $(NACL_TMP).tar.bz2:
 	mkdir -p $(TMP)
@@ -25,14 +36,20 @@ $(BIN): $(NACL_TMP).compiled
 	mkdir -p $(BIN)
 	cp $(NACL_TMP)/build/`hostname -s`/bin/* $(BIN)
 
-$(INCLUDE): $(NACL_TMP).compiled
-	mkdir -p $(INCLUDE)
-	cp -r $(NACL_TMP)/build/`hostname -s`/include/* $(INCLUDE)
+$(INC): $(NACL_TMP).compiled
+	mkdir -p $(INC)
+	cp -r $(NACL_TMP)/build/`hostname -s`/include/* $(INC)
 
 $(LIB): $(NACL_TMP).compiled
 	mkdir -p $(LIB)
 	cp -r $(NACL_TMP)/build/`hostname -s`/lib/* $(LIB)
 
+$(OUT)/genkey.o: $(SRC)/genkey.c
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -c -o $@ $>
+
+$(BIN)/genkey: $(OUT)/genkey.o
+	$(CC) $(LFLAGS) -o $@ $(OUT)/genkey.o $(LIB)/$(ABI)/*.o -lnacl
 
 cleantmp::
 	rm -f $(NACL_TMP).tar.bz2
@@ -40,9 +57,11 @@ cleantmp::
 
 clean:: cleantmp
 	rm -f $(BIN)/*
-	rm -rf $(INCLUDE)/*
+	rm -rf $(INC)/*
 	rm -rf $(LIB)/*
 
 cleanall:: clean
-	rm -rf $(TMP) $(INCLUDE) $(LIB) $(BIN)
+	rm -rf $(TMP) $(INC) $(LIB) $(BIN)
 	
+foo::
+	echo $(ABI)

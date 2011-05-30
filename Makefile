@@ -15,16 +15,21 @@ SQLITE_TMP=$(TMP)/sqlite-autoconf-$(SQLITE_VERSION)
 NACL_URI=http://hyperelliptic.org/nacl/nacl-$(NACL_VERSION).tar.bz2
 SQLITE_URI=http://www.sqlite.org/sqlite-autoconf-$(SQLITE_VERSION).tar.gz
 
+SHORT_HOSTNAME=`hostname | sed 's/\..*//' | tr -cd '[a-z][A-Z][0-9]'`
+
 CC=clang
 
-ABI!=if [ -x $(BIN)/okabi ]; then export PATH=$(BIN):$${PATH}; okabi; fi
+ABI=PATH=$(BIN):$${PATH} okabi | head -n 1
 CWARN+=-Wall -pedantic
-CINC+=-I$(INC) -I$(INC)/$(ABI)
+CINC+=-I$(INC) -I$(INC)/`$(ABI)`
 CLD+=-L$(LIB) -L$(LIB)/$(ABI)
 CFLAGS+=-std=c99 $(CWARN) $(CINC)
 LFLAGS+=-static $(CWARN) $(CLD)
 
 env:: $(BIN) $(LIB) $(INC)
+
+hostname::
+	echo $(SHORT_HOSTNAME)
 
 $(NACL_TMP).tar.bz2:
 	mkdir -p $(TMP)
@@ -57,19 +62,19 @@ $(SQLITE_TMP).compiled: $(SQLITE_TMP)
 
 $(BIN): $(NACL_TMP).compiled
 	mkdir -p $(BIN)
-	cp $(NACL_TMP)/build/`hostname -s`/bin/* $(BIN)
+	cp $(NACL_TMP)/build/$(SHORT_HOSTNAME)/bin/* $(BIN)
 
 $(INC): $(NACL_TMP).compiled
 	mkdir -p $(INC)
-	cp -r $(NACL_TMP)/build/`hostname -s`/include/* $(INC)
+	cp -r $(NACL_TMP)/build/$(SHORT_HOSTNAME)/include/* $(INC)
 
 $(LIB): $(NACL_TMP).compiled
 	mkdir -p $(LIB)
-	cp -r $(NACL_TMP)/build/`hostname -s`/lib/* $(LIB)
+	cp -r $(NACL_TMP)/build/$(SHORT_HOSTNAME)/lib/* $(LIB)
 
 $(OUT)/genkey.o: $(SRC)/genkey.c
 	mkdir -p $(OUT)
-	$(CC) $(CFLAGS) -c -o $@ $>
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BIN)/genkey: $(OUT)/genkey.o
 	$(CC) $(LFLAGS) -o $@ $(OUT)/genkey.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
@@ -78,6 +83,10 @@ genkey: $(BIN)/genkey
 
 cleanbin::
 	rm -f $(BIN)/genkey
+
+cleanout::
+	rm -rf $(OUT)/* 
+
 cleantmp::
 	rm -f $(NACL_TMP).tar.bz2
 	rm -rf $(NACL_TMP).compiled $(NACL_TMP)

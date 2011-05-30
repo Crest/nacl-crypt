@@ -12,6 +12,9 @@ INC?=include
 NACL_TMP=$(TMP)/nacl-$(NACL_VERSION)
 SQLITE_TMP=$(TMP)/sqlite-autoconf-$(SQLITE_VERSION)
 
+NACL_URI=http://hyperelliptic.org/nacl/nacl-$(NACL_VERSION).tar.bz2
+SQLITE_URI=http://www.sqlite.org/sqlite-autoconf-$(SQLITE_VERSION).tar.gz
+
 CC=clang
 
 ABI!=if [ -x $(BIN)/okabi ]; then export PATH=$(BIN):$${PATH}; okabi; fi
@@ -25,13 +28,13 @@ env:: $(BIN) $(LIB) $(INC)
 
 $(NACL_TMP).tar.bz2:
 	mkdir -p $(TMP)
-	fetch -o $@ http://hyperelliptic.org/nacl/nacl-$(NACL_VERSION).tar.bz2
-	[ `sha256 < $@` = $(NACL_SHA256) ] || (echo "$@ is corrupted."; exit 1)
+	if which fetch; then fetch -o $@ $(NACL_URI); else wget -O $@ $(NACL_URI); fi
+	which -s sha256 && [ `sha256 < $@` = $(NACL_SHA256) ] || which -s openssl && [ `openssl sha256 < $@ | sed 's/.*=[^a-fA-F0-9]*//'` = $(NACL_SHA256) ] || (echo "$@ is corrupted."; exit 1)
 
 $(SQLITE_TMP).tar.gz:
 	mkdir -p $(TMP)
-	fetch -o $@ http://www.sqlite.org/sqlite-autoconf-$(SQLITE_VERSION).tar.gz
-	[ `sha256 < $@` = $(SQLITE_SHA256) ] || (echo "$@ is corrupted."; exit 1)
+	if which fetch; then fetch -o $@ $(SQLITE_URI); else wget -O $@ $(SQLITE_URI); fi
+	which -s sha256 && [ `sha256 < $@` = $(SQLITE_SHA256) ] || which -s openssl && [ `openssl sha256 < $@ | sed 's/.*=[^a-fA-F0-9]*//'` = $(SQLITE_SHA256) ] || (echo "$@ is corrupted."; exit 1)
 
 $(NACL_TMP): $(NACL_TMP).tar.bz2
 	bunzip2 < $@.tar.bz2 | tar -x -C $(TMP) -f -

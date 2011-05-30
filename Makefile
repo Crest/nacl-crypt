@@ -19,12 +19,12 @@ SHORT_HOSTNAME=`hostname | sed 's/\..*//' | tr -cd '[a-z][A-Z][0-9]'`
 
 CC=clang
 
-ABI=PATH=$(BIN):$${PATH} okabi | head -n 1
+ABI=`PATH=$(BIN):$${PATH} okabi | head -n 1`
 CWARN+=-Wall -pedantic
-CINC+=-I$(INC) -I$(INC)/`$(ABI)`
+CINC+=-I$(INC) -I$(INC)/$(ABI)
 CLD+=-L$(LIB) -L$(LIB)/$(ABI)
 CFLAGS+=-std=c99 $(CWARN) $(CINC)
-LFLAGS+=-static $(CWARN) $(CLD)
+LFLAGS+=$(CWARN) $(CLD)
 
 env:: $(BIN) $(LIB) $(INC)
 
@@ -74,7 +74,7 @@ $(LIB): $(NACL_TMP).compiled
 
 $(OUT)/genkey.o: $(SRC)/genkey.c
 	mkdir -p $(OUT)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $(SRC)/genkey.c
 
 $(BIN)/genkey: $(OUT)/genkey.o
 	$(CC) $(LFLAGS) -o $@ $(OUT)/genkey.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3

@@ -12,15 +12,15 @@ enum rc get_pk(const char *restrict name, struct pk *pk);
 enum rc get_sk(const char *restrict name, struct sk *sk);
 enum rc get_kp(const char *restrict name, struct kp *kp);
 
-// return false on name collision
+// return error on name collision
 enum rc set_pk(const char *restrict name, const struct pk *pk);
 enum rc set_sk(const char *restrict name, const struct sk *sk);
 enum rc set_kp(const char *restrict name, const struct kp *kp);
 
 // overwrite on name collision
-void put_pk(const char *restrict name, const struct pk *pk);
-void put_pk(const char *restrict name, const struct pk *sk);
-void put_kp(const char *restrict name, const struct kp *kp);
+enum rc put_pk(const char *restrict name, const struct pk *pk);
+enum rc put_sk(const char *restrict name, const struct sk *sk);
+enum rc put_kp(const char *restrict name, const struct kp *kp);
 
 void del_pk(const char *restrict name);
 void del_sk(const char *restrict name);

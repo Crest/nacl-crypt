@@ -76,10 +76,18 @@ $(OUT)/genkey.o: $(SRC)/genkey.c
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC)/genkey.c
 
+$(OUT)/db.o: $(SRC)/db.c
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -c -o $@ $(SRC)/db.c
+
 $(BIN)/genkey: $(OUT)/genkey.o
 	$(CC) $(LFLAGS) -o $@ $(OUT)/genkey.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
 
 genkey: $(BIN)/genkey
+
+################################################################################
+# Clean up
+################################################################################
 
 cleanbin::
 	rm -f $(BIN)/genkey
@@ -97,8 +105,7 @@ cleanenv::
 	rm -rf $(LIB)/*
 	rm -rf $(OUT)/*
 
-clean:: cleantmp cleanbin
-	
+clean:: cleanbin cleanout
 
 cleanall:: clean
 	rm -rf $(TMP) $(INC) $(LIB) $(BIN) $(SHARE) $(OUT)

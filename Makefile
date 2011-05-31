@@ -76,25 +76,34 @@ $(OUT)/genkey.o: $(SRC)/genkey.c
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC)/genkey.c
 
-$(OUT)/db.o: $(SRC)/db.c
+$(OUT)/db.o: $(SRC)/db.c $(SRC)/db.h $(SRC)/types.h
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC)/db.c
 
-$(OUT)/opts.o: $(SRC)/opts.c
+$(OUT)/opts.o: $(SRC)/opts.c $(SRC)/opts.h $(SRC)/types.h $(SRC)/db.h
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC)/opts.c
+
+$(OUT)/nenc.o: $(SRC)/nenc.c $(SRC)/types.h $(SRC)/opts.h $(SRC)/db.h
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -c -o $@ $(SRC)/nenc.c
 
 $(BIN)/genkey: $(OUT)/genkey.o
 	$(CC) $(LFLAGS) -o $@ $(OUT)/genkey.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
 
+$(BIN)/nenc: $(OUT)/nenc.o $(OUT)/db.o $(OUT)/opts.o
+	$(CC) $(LFLAGS) -o $@ $(OUT)/nenc.o $(OUT)/db.o $(OUT)/opts.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
+
 genkey: $(BIN)/genkey
+
+nenc: $(BIN)/nenc
 
 ################################################################################
 # Clean up
 ################################################################################
 
 cleanbin::
-	rm -f $(BIN)/genkey
+	rm -f $(BIN)/genkey $(BIN)/nenc
 
 cleanout::
 	rm -rf $(OUT)/* 

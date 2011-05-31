@@ -1,4 +1,5 @@
 #include "opts.h"
+#include "db.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,39 +34,55 @@ void parse_args(int *argc, char ***argv) {
 				break;
 
 			case 'e':
-				opts.op = opts.op == NOP ? ENCRYPT : MULTIPLE_OPS;
+				if ( opts.op != NOP )
+					usage(*argc, *argv);
+				opts.op = ENCRYPT;
 				break;
 
 			case 'd':
-				opts.op = opts.op == NOP ? DECRYPT : MULTIPLE_OPS;
+				if ( opts.op != NOP )
+					usage(*argc, *argv);
+				opts.op = DECRYPT;
 				break;
 			
 			case 'g':
-				opts.op = opts.op == NOP ? GENERATE_KEY : MULTIPLE_OPS;
-				opts.name = opts.name ? opts.name : optarg;
+				if ( opts.op != NOP || opts.name != NULL )
+					usage(*argc, *argv);
+				opts.op   = GENERATE_KEY;
+				opts.name = optarg;
 				break;
 			
 			case 'x':
-				opts.op = opts.op == NOP ? EXPORT_KEY : MULTIPLE_OPS;
-				opts.name = opts.name ? opts.name : optarg;
+				if ( opts.op != NOP || opts.name != NULL )
+					usage(*argc, *argv);
+				opts.op   = EXPORT_KEY;
+				opts.name = optarg;
 				break;
 
 			case 'i':
-				opts.op = opts.op == NOP ? IMPORT_KEY : MULTIPLE_OPS;
-				opts.name = opts.name ? opts.name : optarg;
+				if ( opts.op != NOP || opts.name != NULL )
+					usage(*argc, *argv);
+				opts.op   = IMPORT_KEY;
+				opts.name = optarg;
 				break;
 			
 			case 'r':
-				opts.op = opts.op == NOP ? DELETE_KEY : MULTIPLE_OPS;
-				opts.name = opts.name ? opts.name : optarg;
+				if ( opts.op != NOP || opts.name != NULL )
+					usage(*argc, *argv);
+				opts.op   = DELETE_KEY;
+				opts.name = optarg;
 				break;
 			
 			case 's':
-				opts.source = opts.source ? opts.source : optarg;
+				if ( opts.source != NULL )
+					usage(*argc, *argv);
+				opts.source = optarg;
 				break;
 			
 			case 't':
-				opts.target = opts.target ? opts.target : optarg;
+				if ( opts.target != NULL )
+					usage(*argc, *argv);
+				opts.target = optarg;
 				break;
 			
 			default:
@@ -104,19 +121,23 @@ void parse_args(int *argc, char ***argv) {
 	if ( opts.use_public == false && opts.use_private == false )
 		opts.use_public = true;
 
+	if ( *argc - optind != 1 )
+		usage(*argc, *argv);
+	
 	*argc -= optind;
 	*argv += optind;
+	open_db(*argv[0]);
 }
 
 static void usage(int argc, char **argv) {
 	const char *argv0 = argc == 0 ? "nenc" : argv[0]; 
 	fprintf(stderr,
-		"usage: %s [-f] -f <name>\n"
-		"       %s [-p] [-P] -x <name>\n"
-		"       %s [-f] [-p] [-P] -i <name>\n"
-		"       %s [-f] [-p] [-P] -r <name>\n"
-		"       %s -e -s <name> -t <name>\n"
-		"       %s -d -t <name> -s <name>\n",
+		"usage: %s [-f] -g <name> <db>\n"
+		"       %s [-p] [-P] -x <name> <db>\n"
+		"       %s [-f] [-p] [-P] -i <name> <db>\n"
+		"       %s [-f] [-p] [-P] -r <name> <db>\n"
+		"       %s -e -s <name> -t <name> <db>\n"
+		"       %s -d -t <name> -s <name> <db>\n",
 		argv0, argv0, argv0, argv0, argv0, argv0
 	);
 	exit(64);

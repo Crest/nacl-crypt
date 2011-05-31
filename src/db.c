@@ -62,7 +62,7 @@ static const char select_id[] =
 	"    WHERE Names.Name = ?;";
 
 static const char insert_name[] =
-	"INSERT INTO Names ( Id, Names )\n"
+	"INSERT INTO Names ( Id, Name )\n"
 	"    VALUES ( NULL, ? );";
 
 static const char insert_sk[] =
@@ -74,12 +74,12 @@ static const char insert_pk[] =
 	"    VALUES ( NULL, ?, ? );";
 
 static const char update_sk[] =
-	"UPDATE PrivateKeys SET ( PrivateKey = ? )\n"
-	"    WHERE NamedId = ?;";
+	"UPDATE PrivateKeys SET PrivateKey = ?\n"
+	"    WHERE NameId = ?;";
 
 static const char update_pk[] =
-	"UPDATE PublicKeys SET ( PublicKey = ? )\n"
-	"    WHERE NamedId = ?;";
+	"UPDATE PublicKeys SET PublicKey = ?\n"
+	"    WHERE NameId = ?;";
 
 static const char delete_sk[] =
 	"DELETE FROM PrivateKeys\n"
@@ -163,6 +163,7 @@ void open_db(const char *restrict db_path) {
 		sqlite3_close(db);
 		exit(EX_SOFTWARE);
 	}
+	define_schema();
 }
 
 void close_db() {
@@ -415,6 +416,7 @@ static enum rc put(const char *restrict name, bool replace, const struct sk *res
 			if ( sqlite3_step(s[INSERT_NAME]) != SQLITE_DONE )
 				explode2(s, insert_name_failed);
 			id = sqlite3_last_insert_rowid(db);
+			break;
 			
 		default:
 			explode2(s, select_id_failed);
@@ -497,12 +499,15 @@ static enum rc put(const char *restrict name, bool replace, const struct sk *res
 	}
 
 	if ( ( rc & KP_STORED ) == rc ) {
-		if ( sqlite3_step(s[COMMIT]) != SQLITE_OK )
+		if ( sqlite3_step(s[COMMIT]) != SQLITE_DONE )
 			explode2(s, commit_failed);
 	} else {
-		if ( sqlite3_step(s[ROLLBACK]) != SQLITE_OK )
+		if ( sqlite3_step(s[ROLLBACK]) != SQLITE_DONE )
 			explode2(s, rollback_failed);
 	}
+
+	for ( int i = 0; i < PUT_STATEMENT_COUNT; i++ )
+		sqlite3_finalize(s[i]);
 	
 	return rc;
 }

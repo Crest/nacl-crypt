@@ -80,6 +80,10 @@ $(OUT)/db.o: $(SRC)/db.c
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC)/db.c
 
+$(OUT)/opts.o: $(SRC)/opts.c
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -c -o $@ $(SRC)/opts.c
+
 $(BIN)/genkey: $(OUT)/genkey.o
 	$(CC) $(LFLAGS) -o $@ $(OUT)/genkey.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
 

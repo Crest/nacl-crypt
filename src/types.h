@@ -18,6 +18,27 @@ typedef struct kp {
 	struct sk sk;
 } kp_t;
 
+typedef enum op {
+	NOP = 0,
+	GENERATE_KEY,
+	EXPORT_KEY,
+	IMPORT_KEY,
+	DELETE_KEY,
+	ENCRYPT,
+	DECRYPT,
+	MULTIPLE_OPS
+} op_t;
+
+typedef struct opts {
+	enum op     op;
+        const char *target;
+	const char *source;
+	const char *name;
+	unsigned    force       : 1;
+	unsigned    use_public  : 1;
+	unsigned    use_private : 1;
+} opts_t;
+
 typedef enum rc {
 	NOT_FOUND  = 0 << 0,
 	PK_FOUND   = 1 << 0,

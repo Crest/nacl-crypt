@@ -5,6 +5,6 @@
 
 extern struct opts opts;
 
-void parse_args(int *argc, char ***argv);
+char *parse_args(int *argc, char ***argv);
 
 #endif /* _NACL_CRYPT_OPTS_H */

@@ -7,26 +7,69 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static int start_db();
+static int dispatch();
 static void generate_key();
 static void export_key();
+static void import_key();
 
 int main(int argc, char **argv) {
-	parse_args(&argc, &argv);
+	char *db_path   = parse_args(&argc, &argv);
+	int   exit_code = 0;
+	
+	if ( exit_code = start_db(db_path) ) goto quit;
+	
+	exit_code = dispatch();
+	
+quit:
+	close_db();
+	return exit_code;
+}
+
+static int dispatch() {
+	int exit_code = 0;
+	
 	switch ( opts.op ) {
         	case GENERATE_KEY:
-			generate_key();
+			exit_code = generate_key();
 			break;
 		
 		case EXPORT_KEY:
-			export_key();
+			exit_code = export_key();
+			break;
+			
+		case IMPORT_KEY:
+			exit_code = import_key();
 			break;
 		
 		default:
 			fprintf(stderr, "Unsupported operation.\n");
+			close_db();
 			exit(2);
 	}
-	
-	close_db();
+}
+
+static int start_db(char *db_path) {
+	enum rc rc;
+	switch ( rc = open_db(db_path) ) {
+        	case OK:
+			return 0;
+
+		case DB_LOCKED:
+			fprintf("Failed to open database. It's locked.");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf("Failed to open database. It's busy.");
+			return 75;
+			break;
+
+		default:
+			fprintf("Failed to open database (rc = %i).\n", rc);
+			return 66;
+			break;
+	}
 }
 
 static uint8_t to_hex(uint8_t n) {
@@ -134,3 +177,6 @@ static void export_key() {
 	}
 }
 
+static void import_key() {
+
+}

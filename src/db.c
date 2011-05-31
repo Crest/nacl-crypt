@@ -7,7 +7,6 @@
 
 #include <sqlite3.h>
 
-
 const char     *db_path = NULL;
 static sqlite3 *db      = NULL;
 
@@ -140,30 +139,76 @@ static void explode2(sqlite3_stmt **stmts, const char *restrict msg);
 static void *memcpy_or_zero(void *restrict dst, const void *restrict src, size_t n);
 
 
-void define_schema() {
+enum rc define_schema() {
 	char *err = NULL;
-	if ( sqlite3_exec(db, schema, NULL, NULL, &err) != SQLITE_OK ) {
-		fprintf(stderr, "%s: %s\n", schema_failed, err);
-		sqlite3_free((void *) err);
-		sqlite3_close(db);
-		exit(EX_CONFIG);
+	switch ( sqlite3_exec(db, schema, NULL, NULL, &err) ) {
+		case SQLITE_OK:
+			break;
+		
+		case SQLITE_LOCKED:
+			sqlite3_free(err);
+			return DB_LOCKED;
+			break;
+		
+		case SQLITE_BUSY:
+			sqlite3_free(err);
+			return DB_BUSY;
+			break;
+
+		default:
+			fprintf(stderr, "%s: %s\n", schema_failed, err);
+			sqlite3_free(err);
+			sqlite3_close(db);
+			exit(EX_CONFIG);
+			break;
 	}
+	
+	return OK;
 }
 
-void open_db(const char *restrict db_path) {
+enum rc open_db(const char *restrict db_path) {
 	char *err = NULL;
-	if ( sqlite3_open(db_path, &db) != SQLITE_OK ) {
-		fprintf(stderr, "%s: %s\n", open_failed, sqlite3_errmsg(db));
-		sqlite3_close(db);
-		exit(EX_NOINPUT);
+	switch ( sqlite3_open(db_path, &db) ) {
+		case SQLITE_OK:
+			break;
+			
+		case SQLITE_LOCKED:
+			sqlite3_close(db);
+			return DB_LOCKED;
+			break;
+		
+		case SQLITE_BUSY:
+			sqlite3_close(db);
+			return DB_BUSY;
+			break;
+			
+		default:
+			fprintf(stderr, "%s: %s\n", open_failed, sqlite3_errmsg(db));
+			sqlite3_close(db);
+			exit(EX_NOINPUT);
+			break;
 	}
-	if ( sqlite3_exec(db, foreign_keys_on, NULL, NULL, &err) != SQLITE_OK ) {
-		fprintf(stderr, "%s: %s\n", foreign_keys_failed, err);
-		sqlite3_free((void *) err);
-		sqlite3_close(db);
-		exit(EX_SOFTWARE);
+	
+	switch ( sqlite3_exec(db, foreign_keys_on, NULL, NULL, &err) ) {
+		case SQLITE_OK:
+			break;
+		
+		case SQLITE_LOCKED:
+			return DB_LOCKED;
+			break;
+		
+		case SQLITE_BUSY:
+			return DB_BUSY;
+			break;
+		
+		default:
+			fprintf(stderr, "%s: %s\n", foreign_keys_failed, err);
+			sqlite3_free((void *) err);
+			sqlite3_close(db);
+			exit(EX_SOFTWARE);
+			break;
 	}
-	define_schema();
+	return define_schema();
 }
 
 void close_db() {

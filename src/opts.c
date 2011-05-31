@@ -17,7 +17,7 @@ struct opts opts = {
 
 static void usage(int argc, char **argv);
 
-void parse_args(int *argc, char ***argv) {
+char *parse_args(int *argc, char ***argv) {
 	int ch;
 	while ( (ch = getopt(*argc, *argv, "fpPedg:x:i:r:s:t:")) != -1 ) {
         	switch ( ch ) {
@@ -126,7 +126,8 @@ void parse_args(int *argc, char ***argv) {
 	
 	*argc -= optind;
 	*argv += optind;
-	open_db(*argv[0]);
+	
+	return *argv[0];
 }
 
 static void usage(int argc, char **argv) {

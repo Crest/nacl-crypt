@@ -72,7 +72,8 @@ typedef enum rc {
 	DB_BUSY     = 5,
 	
 	SK_OVERWRITE_FAILED = 6,
-	PK_OVERWRITE_FAILED = 7
+	PK_OVERWRITE_FAILED = 7,
+	OK          = 8
 } rc_t;
 
 #endif /* _NACL_CRYPT_TYPES_H */

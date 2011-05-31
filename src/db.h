@@ -3,8 +3,8 @@
 
 #include "types.h"
 
-void define_schema();
-void open_db(const char *restrict db_path);
+enum rc define_schema();
+enum rc open_db(const char *restrict db_path);
 void close_db();
 
 // search keys by name.

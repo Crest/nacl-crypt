@@ -18,6 +18,19 @@ typedef struct kp {
 	struct sk sk;
 } kp_t;
 
+typedef struct hex_pk {
+	char hex_pk[2 * crypto_box_PUBLICKEYBYTES + sizeof('\0')];
+} hex_pk_t;
+
+typedef struct hex_sk {
+	char hex_sk[2 * crypto_box_SECRETKEYBYTES + sizeof('\0')];
+} hex_sk_t;
+
+typedef struct hex_kp {
+	struct hex_pk hex_pk;
+	struct hex_sk hex_sk;
+} hex_kp_t;
+
 typedef enum op {
 	NOP = 0,
 	GENERATE_KEY,

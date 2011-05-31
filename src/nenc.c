@@ -5,22 +5,132 @@
 #include <crypto_box.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 
 static void generate_key();
+static void export_key();
 
 int main(int argc, char **argv) {
 	parse_args(&argc, &argv);
 	switch ( opts.op ) {
         	case GENERATE_KEY:
-			printf("Generating keypair named \"%s\".\n", opts.name);
 			generate_key();
 			break;
+		
+		case EXPORT_KEY:
+			export_key();
+			break;
+		
+		default:
+			fprintf(stderr, "Unsupported operation.\n");
+			exit(2);
 	}
+	
 	close_db();
 }
 
+static uint8_t to_hex(uint8_t n) {
+	return ( n < 10 ) ? '0' + n : 'A' - 10 + n;
+}
+
+static void pk_to_hex(struct hex_pk *hex, const struct pk *bin) {
+	for ( int i = 0; i < crypto_box_PUBLICKEYBYTES; i++ ) {
+		uint8_t x = bin->pk[i];
+		hex->hex_pk[2 * i    ] = to_hex(x >> 4);
+		hex->hex_pk[2 * i + 1] = to_hex(x & 15);
+	}
+	hex->hex_pk[2 * crypto_box_PUBLICKEYBYTES] = '\0';
+}
+
+static void sk_to_hex(struct hex_sk *hex, const struct sk *bin) {
+	 for ( int i = 0; i < crypto_box_SECRETKEYBYTES; i++ ) {
+	 	uint8_t x = bin->sk[i];
+		hex->hex_sk[2 * i    ] = to_hex(x >> 4);
+		hex->hex_sk[2 * i + 1] = to_hex(x & 15);
+	}
+	hex->hex_sk[2 * crypto_box_SECRETKEYBYTES] = '\0';
+}
+
+static void kp_to_hex(struct hex_kp *hex, const struct kp *bin) {
+	pk_to_hex(&hex->hex_pk, &bin->pk);
+	sk_to_hex(&hex->hex_sk, &bin->sk);
+}
 static void generate_key() {
 	struct kp kp;
+	enum rc   rc;
 	crypto_box_keypair(kp.pk.pk, kp.sk.sk);
-	printf("rc = %i\n", set_kp(opts.name, &kp));
+	switch ( rc = opts.force ? put_kp(opts.name, &kp) : set_kp(opts.name, &kp) ) {
+        	case KP_STORED:
+			printf("Generated keypair named \"%s\".\n", opts.name);
+			break;
+		case SK_OVERWRITE_FAILED:
+			fprintf(stderr, "Failed to add new private key named \"%s\" to database. Their is an other private key named \"%s\" in the database.\n", opts.name, opts.name);
+			exit(65);
+			break;
+			
+		case PK_OVERWRITE_FAILED:
+			fprintf(stderr, "Failed to add new public key named \"%s\" to database. Their is an other public key named \"%s\" in the database.\n", opts.name, opts.name);
+			exit(65);
+			break;
+		
+		default:
+			fprintf(stderr, "Failed to add key pair to database (rc = %i).\n", rc);
+                        exit(70);
+			break;
+	}
+	
 }
+
+static void export_key() {
+	struct kp     kp;
+	struct hex_kp hex;
+	enum rc       rc = NOT_FOUND;
+
+	if ( opts.use_public && opts.use_private ) {
+		rc = get_kp(opts.name, &kp);
+	} else if ( opts.use_public ) {
+		rc = get_pk(opts.name, &kp.pk);
+	} else if ( opts.use_private ) {
+		rc = get_sk(opts.name, &kp.sk);
+	}
+	
+	switch ( rc ) {
+		case NOT_FOUND:
+        	case PK_FOUND:
+		case SK_FOUND:
+		case KP_FOUND:
+			break;
+		
+                default:
+			fprintf(stderr, "Failed to retrieve key material from database (rc = %i).\n", rc);
+			exit(70);
+			break;
+	}
+
+	if ( rc == NOT_FOUND ) {
+        	fprintf(stderr, "Their is no key named \"%s\" stored in the database.\n", opts.name);
+		exit(1);
+	}
+
+	if ( !(rc & PK_FOUND) && opts.use_public ) {
+		fprintf(stderr, "Their is no public key named \"%s\" stored in the database.\n", opts.name);
+		exit(1);
+	}
+
+	if ( !(rc & SK_FOUND) && opts.use_private ) {
+		fprintf(stderr, "Their is no private key named \"%s\" stored in the database.\n", opts.name);
+		exit(1);
+	}
+	
+	if ( opts.use_public && opts.use_private ) {
+		kp_to_hex(&hex, &kp);
+        	printf("p:%s\nP:%s\n", hex.hex_pk.hex_pk, hex.hex_sk.hex_sk);
+	} else if ( opts.use_public ) {
+		pk_to_hex(&hex.hex_pk, &kp.pk);
+		printf("p:%s\n", hex.hex_pk.hex_pk);
+	} else if ( opts.use_private ) {
+		sk_to_hex(&hex.hex_sk, &kp.sk);
+		printf("P:%s\n", hex.hex_sk.hex_sk);
+	}
+}
+

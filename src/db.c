@@ -258,7 +258,7 @@ static enum rc get(const char *restrict name, const char *restrict query, int qu
 			sqlite3_finalize(stmt);
 			if ( sk ) memset(sk->sk, 0, crypto_box_SECRETKEYBYTES);
 			if ( pk ) memset(pk->pk, 0, crypto_box_PUBLICKEYBYTES);
-			return found;
+			return NOT_FOUND;
 			break;
 		
 		case SQLITE_ROW: {
@@ -281,10 +281,9 @@ static enum rc get(const char *restrict name, const char *restrict query, int qu
 					explode(stmt, sk_len_failed);
 				
 				found = memcpy_or_zero(sk->sk, blob0, crypto_box_SECRETKEYBYTES) ? SK_FOUND : NOT_FOUND;
-			} else {
+			} else if ( pk ) {
 				if ( len0 != crypto_box_PUBLICKEYBYTES )
 					explode(stmt, pk_len_failed);
-				
 				found = memcpy_or_zero(pk->pk, blob0, crypto_box_PUBLICKEYBYTES) ? PK_FOUND : NOT_FOUND;
 			}
 			sqlite3_finalize(stmt);
@@ -294,7 +293,7 @@ static enum rc get(const char *restrict name, const char *restrict query, int qu
 
 		default:
 			explode(stmt, step_select_failed);
-			return found;
+			return NOT_FOUND;
 			break;
 	}
 }
@@ -365,10 +364,10 @@ static enum rc put(const char *restrict name, bool replace, const struct sk *res
 	}
 	
 	// bind parameters known at this time
-	if ( sqlite3_bind_text(s[SELECT_ID], 1, name, strlen(name) + sizeof('\0'), SQLITE_TRANSIENT) != SQLITE_OK )
+	if ( sqlite3_bind_text(s[SELECT_ID], 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
 		explode2(s, msgs[SELECT_ID]);
 
-	if ( sqlite3_bind_text(s[INSERT_NAME], 1, name, strlen(name) + sizeof('\0'), SQLITE_TRANSIENT) != SQLITE_OK )
+	if ( sqlite3_bind_text(s[INSERT_NAME], 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
 		explode2(s, msgs[INSERT_NAME]);
 	
 	if ( pk && sqlite3_bind_blob(s[INSERT_PK], 2, pk, crypto_box_SECRETKEYBYTES, SQLITE_TRANSIENT) != SQLITE_OK )

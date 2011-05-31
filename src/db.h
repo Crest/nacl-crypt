@@ -22,8 +22,8 @@ enum rc put_pk(const char *restrict name, const struct pk *pk);
 enum rc put_sk(const char *restrict name, const struct sk *sk);
 enum rc put_kp(const char *restrict name, const struct kp *kp);
 
-void del_pk(const char *restrict name);
-void del_sk(const char *restrict name);
-void del_kp(const char *restrict name);
+enum rc del_pk(const char *restrict name);
+enum rc del_sk(const char *restrict name);
+enum rc del_kp(const char *restrict name);
 
 #endif /* NACL_CRYPT_DB_H */

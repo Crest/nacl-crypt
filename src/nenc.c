@@ -575,6 +575,9 @@ static int decrypt() {
 	uint8_t c[crypto_secretbox_ZEROBYTES + BS];
 	
 	for ( uint64_t i = 0; true; i++ ) {
+		if ( feof(stdin) )
+			break;
+		
 		if ( i == UINT64_MAX ) {
 			fprintf(stderr, "You managed to decrypt 2^64 blocks -> Overflow :-(.");
 			return 70;
@@ -590,9 +593,7 @@ static int decrypt() {
 			return 74;
 		}
 		
-		if ( feof(stdin) )
-			break;
-		
+			
 		if ( j < MAC_LENGTH ) {
 			fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". The block #%" PRIu64 " is too short be valid.\n", opts.source, opts.target, i);
 			return 76;

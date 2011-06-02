@@ -24,8 +24,10 @@ CWARN+=-Wall -pedantic
 CINC+=-I$(INC) -I$(INC)/$(ABI)
 CLD+=-L$(LIB) -L$(LIB)/$(ABI)
 CFLAGS+=-std=c99 $(CWARN) $(CINC)
-LFLAGS+=$(CWARN) $(CLD)
+LFLAGS+=`[ $(STATIC) ] && echo '-static'` $(CWARN) $(CLD)
 
+
+all:: env nenc
 env:: $(BIN) $(LIB) $(INC)
 
 hostname::

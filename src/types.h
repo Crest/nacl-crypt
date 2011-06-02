@@ -49,12 +49,11 @@ typedef enum op {
 	DELETE_KEY,
 	ENCRYPT,
 	DECRYPT,
-	MULTIPLE_OPS
 } op_t;
 
 typedef struct opts {
 	enum op     op;
-        const char *target;
+	const char *target;
 	const char *source;
 	const char *name;
 	unsigned    force       : 1;

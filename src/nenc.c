@@ -18,6 +18,7 @@ static int dispatch();
 static int generate_key();
 static int export_key();
 static int import_key();
+static int delete_key();
 static int encrypt();
 static int decrypt();
 
@@ -48,6 +49,10 @@ static int dispatch() {
 			
 		case IMPORT_KEY:
 			exit_code = import_key();
+			break;
+
+		case DELETE_KEY:
+			exit_code = delete_key();
 			break;
 
 		case ENCRYPT:
@@ -600,5 +605,59 @@ static int decrypt() {
 
 	}
 	
+	return 0;
+}
+
+static int delete_key() {
+	enum rc rc = NOT_DELETED;
+	
+	if ( opts.use_public && opts.use_private ) {
+    	rc = del_kp(opts.name);
+	} else if ( opts.use_public ) {
+		rc = del_pk(opts.name);
+	} else if ( opts.use_private ) {
+		rc = del_sk(opts.name);
+	}
+	
+	switch ( rc ) {
+    	case KP_DELETED:
+		case PK_DELETED:
+		case SK_DELETED:
+		case NOT_DELETED:
+			break;
+
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to delete key material. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to delete key material. The database is busy.\n");
+			return 75;
+			break;
+
+		default:
+			fprintf(stderr, "Failed to delete key material (rc = %i).\n", rc);
+			return 70;
+			break;
+	}
+
+	if ( !opts.force ) {
+		if ( rc == NOT_DELETED && !(opts.use_public ^ opts.use_private) ) {
+			fprintf(stderr, "Failed to delete key pair named \"%s\" from the database because their is no such key in the database.\n", opts.name);
+			return 1;
+		}
+
+		if ( !(rc & PK_DELETED) && opts.use_public ) {
+        	fprintf(stderr, "Failed to delete public key named \"%s\" from the database because their is no such public key in the database.\n", opts.name);
+			return 1;
+		}
+
+		if ( !(rc & SK_DELETED) && opts.use_private ) {
+        	fprintf(stderr, "Failed do delete private key named \"%s\" from the database because their is no such private key in the database.\n", opts.name);
+			return 1;
+		}
+	}       
+
 	return 0;
 }

@@ -19,7 +19,7 @@ static void usage(int argc, char **argv);
 
 char *parse_args(int *argc, char ***argv) {
 	int ch;
-	while ( (ch = getopt(*argc, *argv, "fpPedg:x:i:r:s:t:")) != -1 ) {
+	while ( (ch = getopt(*argc, *argv, "fpPedlg:x:i:r:s:t:")) != -1 ) {
         	switch ( ch ) {
                 	case 'f':
 				opts.force = true;
@@ -43,6 +43,12 @@ char *parse_args(int *argc, char ***argv) {
 				if ( opts.op != NOP )
 					usage(*argc, *argv);
 				opts.op = DECRYPT;
+				break;
+
+			case 'l':
+				if ( opts.op != NOP )
+					usage(*argc, *argv);
+				opts.op = LIST_KEYS;
 				break;
 			
 			case 'g':
@@ -92,7 +98,7 @@ char *parse_args(int *argc, char ***argv) {
 
 	
 	switch ( opts.op ) {
-                case ENCRYPT:
+		case ENCRYPT:
 		case DECRYPT:
 			if ( opts.force || opts.use_public || opts.use_private || opts.source == NULL || opts.target == NULL || opts.name != NULL )
 				usage(*argc, *argv);
@@ -114,11 +120,16 @@ char *parse_args(int *argc, char ***argv) {
 				usage(*argc, *argv);
 			break;
 
+		case LIST_KEYS:
+			if ( opts.force || opts.name || opts.target || opts.source )
+				usage(*argc, *argv);
+			break;
+
 		default:
 			usage(*argc, *argv);
 	}
 
-	if ( opts.use_public == false && opts.use_private == false )
+	if ( opts.op != LIST_KEYS && opts.use_public == false && opts.use_private == false )
 		opts.use_public = true;
 
 	if ( *argc - optind != 1 )
@@ -138,8 +149,9 @@ static void usage(int argc, char **argv) {
 		"       %s [-f] [-p] [-P] -i <name> <db>\n"
 		"       %s [-f] [-p] [-P] -r <name> <db>\n"
 		"       %s -e -s <name> -t <name> <db>\n"
-		"       %s -d -t <name> -s <name> <db>\n",
-		argv0, argv0, argv0, argv0, argv0, argv0
+		"       %s -d -t <name> -s <name> <db>\n"
+		"       %s [-p] [-P] -l <db>\n",
+		argv0, argv0, argv0, argv0, argv0, argv0, argv0
 	);
 	exit(64);
 }

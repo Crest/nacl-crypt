@@ -47,6 +47,7 @@ typedef enum op {
 	EXPORT_KEY,
 	IMPORT_KEY,
 	DELETE_KEY,
+	LIST_KEYS,
 	ENCRYPT,
 	DECRYPT,
 } op_t;

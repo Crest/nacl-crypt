@@ -3,12 +3,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sysexits.h>
+#include <inttypes.h>
 
 #include <sqlite3.h>
 
 const char     *db_path = NULL;
 static sqlite3 *db      = NULL;
+
+#define CHARS_PER_UINT32 (10)
 
 static const char schema[] =
 	"CREATE TABLE IF NOT EXISTS Names (\n"
@@ -19,13 +21,13 @@ static const char schema[] =
 	"CREATE TABLE IF NOT EXISTS PublicKeys (\n"
 	"    Id        INTEGER PRIMARY KEY ASC AUTOINCREMENT,\n"
 	"    NameId    INTEGER NOT NULL UNIQUE REFERENCES Names(Id) ON DELETE CASCADE ON UPDATE CASCADE,\n"
-	"    PublicKey BLOB NOT NULL\n"
+	"    PublicKey BLOB NOT NULL CHECK ( LENGTH(PublicKey) = %" PRIu32 " )\n"
 	");\n"
 
 	"CREATE TABLE IF NOT EXISTS PrivateKeys (\n"
 	"    Id         INTEGER PRIMARY KEY ASC AUTOINCREMENT,\n"
 	"    NameId     INTEGER NOT NULL UNIQUE REFERENCES Names(Id) ON DELETE CASCADE ON UPDATE CASCADE,\n"
-	"    PrivateKey BLOB NOT NULL\n"
+	"    PrivateKey BLOB NOT NULL CHECK ( LENGTH(PrivateKey) = %" PRIu32 " )\n"
 	");";
 
 static const char select_pk[] =
@@ -43,6 +45,20 @@ static const char select_kp[] =
 	"    JOIN PrivateKeys ON PrivateKeys.NameId = Names.Id\n"
 	"    JOIN PublicKeys  ON PublicKeys.NameId  = Names.Id\n"
 	"    WHERE Names.Name = ?;";
+
+static const char select_all[] =
+	"SELECT Names.Name, PublicKeys.PublicKey, NULL FROM Names\n"
+    "    JOIN PublicKeys ON Names.Id = PublicKeys.NameId\n"
+	"    WHERE Names.Id NOT IN (SELECT PrivateKeys.NameId FROM PrivateKeys)\n"
+	"UNION ALL\n"
+	"SELECT Names.Name, NULL, PrivateKeys.PrivateKey FROM Names\n"
+	"    JOIN PrivateKeys ON Names.Id = PrivateKeys.NameId\n"
+	"    WHERE Names.Id NOT IN (SELECT PublicKeys.NameId FROM PublicKeys)\n"
+	"UNION ALL\n"
+	"SELECT Names.Name, PublicKeys.PublicKey, PrivateKeys.PrivateKey FROM Names\n"
+	"    JOIN PublicKeys  ON Names.Id = PublicKeys.NameId\n"
+	"    JOIN PrivateKeys ON Names.Id = PrivateKeys.NameId\n"
+	"ORDER BY Names.Name;";
 
 static const char foreign_keys_on[] =
 	"PRAGMA foreign_keys = ON;";
@@ -104,6 +120,7 @@ static const char sk_len_failed[]         = "Public key read from database has w
 static const char step_select_failed[]    = "Failed to step through rows returned by select statement for key retrieval";
 static const char foreign_keys_failed[]   = "Failed to enable foreign key support";
 
+static const char prepare_schema_failed[]      = "Failed to prepare SQL query for schema definition";
 static const char prepare_begin_failed[]       = "Failed to prepare begin transaction statement";
 static const char prepare_commit_failed[]      = "Failed to prepare commit transaction statement";
 static const char prepare_rollback_failed[]    = "Failed to prepare rollback transaction statement";
@@ -116,6 +133,7 @@ static const char prepare_update_sk_failed[]   = "Failed to prepare update state
 static const char prepare_delete_pk_failed[]   = "Failed to prepare delete statement to delete public key";
 static const char prepare_delete_sk_failed[]   = "Failed to prepare delete statement to delete private key";
 static const char prepare_delete_name_failed[] = "Failed to prepare delete statement to delete name";
+static const char prepare_select_all_failed[]  = "Failed to prepare select statement to retrieve all key material";
 static const char select_id_failed[]           = "Failed to select id by name";
 static const char insert_name_failed[]         = "Failed to insert name";
 static const char bind_name_id_failed[]        = "Failed to bind name id to insert";
@@ -130,6 +148,7 @@ static const char begin_failed[]               = "Failed to begin transaction";
 static const char delete_sk_failed[]           = "Failed to delete private key";
 static const char delete_pk_failed[]           = "Failed to delete public key";
 static const char delete_name_failed[]         = "Failed to delete name";
+static const char select_all_failed[]          = "Failed to select all key material";
 
 static enum rc get(const char *restrict name, const char *restrict query, int query_len, struct sk *restrict sk, struct pk *restrict pk);
 static enum rc put(const char *restrict name, bool replace, const struct sk *restrict sk, const struct pk *restrict pk);
@@ -141,7 +160,15 @@ static void *memcpy_or_zero(void *restrict dst, const void *restrict src, size_t
 
 enum rc define_schema() {
 	char *err = NULL;
-	switch ( sqlite3_exec(db, schema, NULL, NULL, &err) ) {
+	char buf[strlen(schema) + sizeof('\0') + 2 * CHARS_PER_UINT32];
+	
+	if ( snprintf(buf, sizeof(buf), schema, crypto_box_PUBLICKEYBYTES, crypto_box_SECRETKEYBYTES) < 0 ) {
+    	sqlite3_close(db);
+		fprintf(stderr, "%s.\n", prepare_schema_failed);
+		exit(70);
+	}
+	
+	switch ( sqlite3_exec(db, buf, NULL, NULL, &err) ) {
 		case SQLITE_OK:
 			break;
 		
@@ -159,7 +186,7 @@ enum rc define_schema() {
 			fprintf(stderr, "%s: %s\n", schema_failed, err);
 			sqlite3_free(err);
 			sqlite3_close(db);
-			exit(EX_CONFIG);
+			exit(78);
 			break;
 	}
 	
@@ -185,7 +212,7 @@ enum rc open_db(const char *restrict db_path) {
 		default:
 			fprintf(stderr, "%s: %s\n", open_failed, sqlite3_errmsg(db));
 			sqlite3_close(db);
-			exit(EX_NOINPUT);
+			exit(66);
 			break;
 	}
 	
@@ -205,7 +232,7 @@ enum rc open_db(const char *restrict db_path) {
 			fprintf(stderr, "%s: %s\n", foreign_keys_failed, err);
 			sqlite3_free((void *) err);
 			sqlite3_close(db);
-			exit(EX_SOFTWARE);
+			exit(70);
 			break;
 	}
 	return define_schema();
@@ -214,7 +241,7 @@ enum rc open_db(const char *restrict db_path) {
 void close_db() {
 	if ( sqlite3_close(db) != SQLITE_OK ) {
 		fprintf(stderr, "%s: %s\n", close_failed, sqlite3_errmsg(db));
-		exit(EX_SOFTWARE);
+		exit(70);
 	}
 }
 
@@ -270,7 +297,7 @@ static void explode(sqlite3_stmt *stmt, const char *restrict msg) {
 	sqlite3_finalize(stmt);
 	fprintf(stderr, "%s: %s\n", msg, sqlite3_errmsg(db));
 	sqlite3_close(db);
-	exit(EX_SOFTWARE);
+	exit(70);
 }
 
 static void explode2(sqlite3_stmt **stmts, const char *restrict msg) {
@@ -278,7 +305,7 @@ static void explode2(sqlite3_stmt **stmts, const char *restrict msg) {
 		sqlite3_finalize(*stmts++);
 	fprintf(stderr, "%s: %s\n", msg, sqlite3_errmsg(db));
 	sqlite3_close(db);
-	exit(EX_SOFTWARE); 
+	exit(70); 
 }
 
 static void *memcpy_or_zero(void *restrict dst, const void *restrict src, size_t n) {
@@ -615,9 +642,9 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 	sqlite3_stmt *del_pk   = s[DELETE_PK];
 	sqlite3_stmt *del_name = s[DELETE_NAME];
 
-	if ( sk && sqlite3_bind_text(del_sk, 1, name, strlen(name) + sizeof('\0'), SQLITE_TRANSIENT) != SQLITE_OK )
+	if ( sk && sqlite3_bind_text(del_sk, 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
 		explode2(s, bind_name_failed);
-	if ( pk && sqlite3_bind_text(del_pk, 1, name, strlen(name) + sizeof('\0'), SQLITE_TRANSIENT) != SQLITE_OK )
+	if ( pk && sqlite3_bind_text(del_pk, 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
 		explode2(s, bind_name_failed);
 	if ( sqlite3_bind_text(del_name, 1, name, strlen(name) + sizeof('\0'), SQLITE_TRANSIENT) != SQLITE_OK )
 		explode2(s, bind_name_failed);	
@@ -668,5 +695,89 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 		explode2(s, commit_failed);
 	}
 
+	for ( int i = 0; i < DEL_STATEMENT_COUNT; i++ ) {
+    	sqlite3_finalize(s[i]);
+	}
 	return rc;
+}
+
+enum rc list_kp(list_f f) {
+	enum rc rc;
+
+	sqlite3_stmt *select = NULL;
+	if ( sqlite3_prepare_v2(db, select_all, strlen(select_all) + sizeof('\0'), &select, NULL) != SQLITE_OK ) {
+    	explode(select, prepare_select_all_failed);
+	}
+
+	do {
+    	switch ( sqlite3_step(select) ) {
+        	case SQLITE_DONE:
+				rc = OK;
+				break;
+
+			case SQLITE_ROW: {
+                const unsigned char *const name  = sqlite3_column_text (select, 0);
+				const void          *const p     = sqlite3_column_blob (select, 1);
+				const int                  p_len = sqlite3_column_bytes(select, 1);
+				const void          *const s     = sqlite3_column_blob (select, 2);
+				const int                  s_len = sqlite3_column_bytes(select, 2);
+				      enum rc              found = NOT_FOUND;
+					  struct kp            kp;
+				
+				if ( !name )
+                	explode(select, "Constraint violation (unnamed row).");
+
+				if ( !p && !s )
+					explode(select, "Constraint violation (name without any key)");
+
+				if ( p && p_len != crypto_box_PUBLICKEYBYTES ) {
+                	explode(select, "Constraint violation (public key with invalid length).");
+				}
+
+				if ( s && s_len != crypto_box_SECRETKEYBYTES ) {
+                	explode(select, "Constraint violation (private key with invalid length).");
+				}
+
+		   		if ( p && s ) {
+					found = KP_FOUND;
+					memcpy(kp.pk.pk, p, crypto_box_PUBLICKEYBYTES);
+					memcpy(kp.sk.sk, s, crypto_box_SECRETKEYBYTES);
+				} else if ( p ) {
+					found = PK_FOUND;
+					memcpy(kp.pk.pk, p, crypto_box_PUBLICKEYBYTES);
+					memset(kp.sk.sk, 0, crypto_box_SECRETKEYBYTES);
+				} else if ( s ) {
+					found = SK_FOUND;
+					memset(kp.pk.pk, 0, crypto_box_PUBLICKEYBYTES);
+					memcpy(kp.sk.sk, s, crypto_box_SECRETKEYBYTES);
+				}
+
+				rc = f(found, name, &kp);
+				if ( rc != OK ) {
+					sqlite3_finalize(select);
+					return rc;
+				}
+				rc = NOT_FOUND;
+				
+				break;
+			}
+
+			case SQLITE_LOCKED:
+				sqlite3_finalize(select);
+				return DB_LOCKED;
+				break;
+
+			case SQLITE_BUSY:
+				sqlite3_finalize(select);
+				return DB_BUSY;
+				break;
+			
+			default:
+				explode(select, select_all_failed);
+				break;
+		}
+	} while ( rc != OK );
+
+	sqlite3_finalize(select);
+	return OK;
 }

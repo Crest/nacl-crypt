@@ -19,6 +19,7 @@ static int generate_key();
 static int export_key();
 static int import_key();
 static int delete_key();
+static int list_keys();
 static int encrypt();
 static int decrypt();
 
@@ -53,6 +54,10 @@ static int dispatch() {
 
 		case DELETE_KEY:
 			exit_code = delete_key();
+			break;
+
+		case LIST_KEYS:
+			exit_code = list_keys();
 			break;
 
 		case ENCRYPT:
@@ -658,6 +663,55 @@ static int delete_key() {
 			return 1;
 		}
 	}       
+	
+	return 0;
+}
 
+static enum rc list_callback(enum rc rc, const unsigned char *name, const struct kp *kp) {
+	struct hex_kp hex;
+	bool p = opts.use_public  && (rc & PK_FOUND);
+	bool s = opts.use_private && (rc & SK_FOUND);
+	
+	if ( p && s ) {
+		kp_to_hex(&hex, kp);
+		printf("%s\t%s\t%s\n", name, hex.hex_pk.hex_pk, hex.hex_sk.hex_sk);
+	} else if ( p ) {
+		char sk[2*crypto_box_SECRETKEYBYTES+sizeof('\0')];
+    	pk_to_hex(&hex.hex_pk, &kp->pk);
+		memset(sk, '_', sizeof(sk) - sizeof('\0'));
+		sk[2*crypto_box_SECRETKEYBYTES] = '\0';
+		printf("%s\t%s\t%s\n", name, hex.hex_pk.hex_pk, sk);
+	} else if ( s ) {
+		char pk[2*crypto_box_PUBLICKEYBYTES+sizeof('\0')];
+    	sk_to_hex(&hex.hex_sk, &kp->sk);
+		memset(pk, '_', sizeof(pk) - sizeof('\0'));
+		pk[2*crypto_box_PUBLICKEYBYTES] = '\0';
+		printf("%s\t%s\t%s\n", name, pk, hex.hex_sk.hex_sk);
+	} else {
+    	printf("%s\n", name);
+	}
+	return OK;
+}
+static int list_keys() {
+	enum rc rc;
+	switch ( (rc = list_kp(list_callback)) ) {
+		case OK:
+			break;
+
+    	case DB_LOCKED:
+			fprintf(stderr, "Failed to iterate over key material. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to iterate over key material. The database is busy.\n");
+			return 75;
+			break;
+
+		default:
+			fprintf(stderr, "Failed to iterate over key material (rc = %i)\n", rc);
+			return 70;
+			break;
+	}
 	return 0;
 }

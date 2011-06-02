@@ -1,1 +1,6 @@
 This is a little experiement with NaCl and SQLite.
+
+Build with:
+	
+	make env
+	make nenc

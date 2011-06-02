@@ -1,9 +1,12 @@
 #ifndef _NACL_CRYPT_TYPES_H
 #define _NACL_CRYPT_TYPES_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #include <crypto_box.h>
+#include <crypto_secretbox.h>
 
 typedef struct pk {
 	uint8_t pk[crypto_box_PUBLICKEYBYTES];
@@ -17,6 +20,13 @@ typedef struct kp {
 	struct pk pk;
 	struct sk sk;
 } kp_t;
+
+#define NONCE_LENGTH (crypto_box_NONCEBYTES)
+#define MAC_LENGTH   (crypto_box_ZEROBYTES - crypto_box_BOXZEROBYTES)
+#define KEY_LENGTH   (crypto_secretbox_KEYBYTES)
+typedef struct hdr {
+	uint8_t hdr[NONCE_LENGTH + MAC_LENGTH + KEY_LENGTH];
+} hdr_t;
 
 typedef struct hex_pk {
 	char hex_pk[2 * crypto_box_PUBLICKEYBYTES + sizeof('\0')];

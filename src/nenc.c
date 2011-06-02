@@ -1,18 +1,25 @@
 #include "types.h"
 #include "db.h"
 #include "opts.h"
+#include "hdr.h"
 
 #include <crypto_box.h>
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
+
+#define BS (131072)
 
 static int start_db();
 static int dispatch();
 static int generate_key();
 static int export_key();
 static int import_key();
+static int encrypt();
+static int decrypt();
 
 int main(int argc, char **argv) {
 	char *db_path   = parse_args(&argc, &argv);
@@ -41,6 +48,14 @@ static int dispatch() {
 			
 		case IMPORT_KEY:
 			exit_code = import_key();
+			break;
+
+		case ENCRYPT:
+			exit_code = encrypt();
+			break;
+
+		case DECRYPT:
+			exit_code = decrypt();
 			break;
 		
 		default:
@@ -100,15 +115,17 @@ static void kp_to_hex(struct hex_kp *hex, const struct kp *bin) {
 	pk_to_hex(&hex->hex_pk, &bin->pk);
 	sk_to_hex(&hex->hex_sk, &bin->sk);
 }
+
 static int generate_key() {
 	struct kp kp;
 	enum rc   rc;
 	crypto_box_keypair(kp.pk.pk, kp.sk.sk);
 	
 	switch ( rc = opts.force ? put_kp(opts.name, &kp) : set_kp(opts.name, &kp) ) {
-        	case KP_STORED:
+		case KP_STORED:
 			printf("Generated keypair named \"%s\".\n", opts.name);
 			break;
+		
 		case SK_OVERWRITE_FAILED:
 			fprintf(stderr, "Failed to add new private key named \"%s\" to database. Their is an other private key named \"%s\" in the database.\n", opts.name, opts.name);
 			return 65;
@@ -117,6 +134,16 @@ static int generate_key() {
 		case PK_OVERWRITE_FAILED:
 			fprintf(stderr, "Failed to add new public key named \"%s\" to database. Their is an other public key named \"%s\" in the database.\n", opts.name, opts.name);
 			return 65;
+			break;
+
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to add new key pair. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to add new key pair. The database is busy.\n");
+			return 75;
 			break;
 		
 		default:
@@ -148,6 +175,16 @@ static int export_key() {
 		case KP_FOUND:
 			break;
 		
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to retrieve key material. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to retrieve key material. The database is busy.\n");
+			return 75;
+			break;
+			
 		default:
 			fprintf(stderr, "Failed to retrieve key material from database (rc = %i).\n", rc);
 			return 70;
@@ -309,6 +346,16 @@ static int import_key() {
 		case KP_STORED:
 			break;
 
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to import key. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to import key. The database is busy.\n");
+			return 75;
+			break;
+
 		case SK_OVERWRITE_FAILED:
 			fprintf(stderr, "Failed to add new private key named \"%s\" to database. Their is an other private key named \"%s\" in the database.\n", opts.name, opts.name);
 			return 65;
@@ -323,6 +370,234 @@ static int import_key() {
 			fprintf(stderr, "Failed to add key pair to database (rc = %i).\n", rc);
 			return 70;
 			break;
+	}
+	
+	return 0;
+}
+
+
+static int encrypt() {
+	struct pk  pk;
+	struct sk  sk;
+	struct hdr hdr;
+	enum   rc  rc;
+    
+	switch ( (rc = get_pk(opts.target, &pk)) ) {
+		case PK_FOUND:
+			break;
+
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to retrieve public key. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to retrieve public key. The database is busy.\n");
+			return 75;
+			break;
+        
+		case NOT_FOUND:
+			fprintf(stderr, "Their is no public key named \"%s\" in the database.\n", opts.target);
+			return 1;
+			break;
+
+		default:
+			fprintf(stderr, "Failed to retrieve public key (rc = %i).\n", rc);
+			return 70;
+			break;
+	}
+
+	switch ( (rc = get_sk(opts.source, &sk)) ) {
+    	case SK_FOUND:
+			break;
+
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to retrieve private key. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to retrieve private key. The databse is busy.\n");
+			return 75;
+			break;
+
+		case NOT_FOUND:
+			fprintf(stderr, "Their is no private key named \"%s\" in the database.\n", opts.source);
+			return 1;
+			break;
+
+		default:
+			fprintf(stderr, "Failed to retrieve privat key (rc = %i).\n", rc);
+			return 70;
+			break;
+	}
+	
+	init_hdr(&hdr);
+	uint8_t k[crypto_secretbox_KEYBYTES];
+	memcpy(k, &hdr.hdr + NONCE_LENGTH + MAC_LENGTH, sizeof(k));
+	
+	if ( enc_hdr(&hdr, &pk, &sk) ) {
+    	fprintf(stderr, "I'm to dumb to use crypto_box().\n");
+		return 70;
+	}
+
+	if ( fwrite(&hdr.hdr, sizeof(hdr.hdr), 1, stdout) != 1 || ferror(stdout) ) {
+    	fprintf(stderr, "Failed to encrypt message from \"%s\" to \"%s\". Write to standard output failed.\n", opts.source, opts.target);
+		return 74;
+	}
+		
+	// if ( dec_hdr(&hdr, &pk, &sk) ) {
+    // 	return 70;
+	// }
+
+	uint8_t n[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	uint8_t m[crypto_secretbox_ZEROBYTES + BS];
+	uint8_t c[crypto_secretbox_ZEROBYTES + BS];
+	
+	for ( uint64_t i = 0; true; i++ ) {
+		if ( i == UINT64_MAX ) {
+        	fprintf(stderr, "You managed to encrypt 2^64 blocks -> Overflow :-(.");
+			return 70;
+		}
+		
+		n[0] = i >> 56; n[1] = i >> 48; n[2] = i >> 40; n[3] = i >> 32;
+		n[4] = i >> 24; n[5] = i >> 16; n[6] = i >>  8; n[7] = i >>  0;
+
+		memset(m, 0, crypto_secretbox_ZEROBYTES);
+		size_t j = fread(m + crypto_secretbox_ZEROBYTES, 1, BS, stdin);
+		if ( ferror(stdin) ) {
+        	fprintf(stderr, "Failed to encrypt message from \"%s\" to \"%s\". Read from standard input failed.\n", opts.source, opts.target);
+			return 74;
+		}
+		
+		if ( crypto_secretbox(c, m, crypto_secretbox_ZEROBYTES + j, n, k) ) {
+			fprintf(stderr, "I'm to dumb to use crypto_secretbox().\n");
+			return 70;
+		}
+
+		if ( fwrite(c + crypto_secretbox_BOXZEROBYTES, j + crypto_secretbox_BOXZEROBYTES, 1, stdout) != 1 || ferror(stdout) ) {
+        	fprintf(stderr, "Failed to encrypt message from \"%s\" to \"%s\". Write to standard output failed.\n", opts.source, opts.target);
+			return 74;
+		}
+		
+		if ( feof(stdin) )
+			break;
+	}
+	return 0;
+}
+
+static int decrypt() {
+	struct pk  pk;
+	struct sk  sk;
+	struct hdr hdr;
+	enum   rc  rc;
+	    
+	switch ( (rc = get_pk(opts.source, &pk)) ) {
+		case PK_FOUND:
+			break;
+
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to retrieve public key. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to retrieve public key. The database is busy.\n");
+			return 75;
+			break;
+        
+		case NOT_FOUND:
+			fprintf(stderr, "Their is no public key named \"%s\" in the database.\n", opts.target);
+			return 1;
+			break;
+
+		default:
+			fprintf(stderr, "Failed to retrieve public key (rc = %i).\n", rc);
+			return 70;
+			break;
+	}
+
+	switch ( (rc = get_sk(opts.target, &sk)) ) {
+    	case SK_FOUND:
+			break;
+
+		case DB_LOCKED:
+			fprintf(stderr, "Failed to retrieve private key. The database is locked.\n");
+			return 75;
+			break;
+
+		case DB_BUSY:
+			fprintf(stderr, "Failed to retrieve private key. The databse is busy.\n");
+			return 75;
+			break;
+
+		case NOT_FOUND:
+			fprintf(stderr, "Their is no private key named \"%s\" in the database.\n", opts.source);
+			return 1;
+			break;
+
+		default:
+			fprintf(stderr, "Failed to retrieve privat key (rc = %i).\n", rc);
+			return 70;
+			break;
+	}
+	
+	if ( fread(hdr.hdr, sizeof(hdr.hdr), 1, stdin) != 1 || ferror(stdin) ) {
+    	fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". Read from standard input failed.\n", opts.source, opts.target);
+		return 74;
+	}
+
+	if ( feof(stdin) ) {
+    	fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". The message is too short to be valid.\n", opts.source, opts.target);
+		return 76;
+	}
+	
+	if ( dec_hdr(&hdr, &pk, &sk) ) {
+		fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". The header is corrupted.\n", opts.source, opts.target);
+		return 76;
+	}
+
+	uint8_t k[crypto_secretbox_KEYBYTES];
+	memcpy(k, &hdr.hdr + NONCE_LENGTH + MAC_LENGTH, sizeof(k));
+	
+	uint8_t n[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	uint8_t m[crypto_secretbox_ZEROBYTES + BS];
+	uint8_t c[crypto_secretbox_ZEROBYTES + BS];
+	
+	for ( uint64_t i = 0; true; i++ ) {
+		if ( i == UINT64_MAX ) {
+			fprintf(stderr, "You managed to decrypt 2^64 blocks -> Overflow :-(.");
+			return 70;
+		}
+
+		n[0] = i >> 56; n[1] = i >> 48; n[2] = i >> 40; n[3] = i >> 32;
+		n[4] = i >> 24; n[5] = i >> 16; n[6] = i >>  8; n[7] = i >>  0;
+		
+		memset(c, 0, crypto_secretbox_BOXZEROBYTES);
+		size_t j = fread(c + crypto_secretbox_BOXZEROBYTES, 1, BS + MAC_LENGTH, stdin);
+		if ( ferror(stdin) ) {
+			fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". Read from standard output failed.\n", opts.source, opts.target);
+			return 74;
+		}
+		
+		if ( feof(stdin) )
+			break;
+		
+		if ( j < MAC_LENGTH ) {
+			fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". The block #%" PRIu64 " is too short be valid.\n", opts.source, opts.target, i);
+			return 76;
+		}
+    	
+		if ( crypto_secretbox_open(m, c, crypto_secretbox_BOXZEROBYTES + j, n, k) ) {
+        	fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". The block #%" PRIu64 " has an invalid MAC.\n", opts.source, opts.target, i);
+			return 76;
+		}
+		
+		if ( fwrite(m + crypto_secretbox_ZEROBYTES, j - MAC_LENGTH, 1, stdout) != 1 || ferror(stdout) ) {
+        	fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". Write to standard output failed.\n", opts.source, opts.target);
+			return 74;
+		}
+
 	}
 	
 	return 0;

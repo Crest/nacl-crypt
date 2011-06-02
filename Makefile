@@ -84,6 +84,10 @@ $(OUT)/opts.o: $(SRC)/opts.c $(SRC)/opts.h $(SRC)/types.h $(SRC)/db.h
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC)/opts.c
 
+$(OUT)/hdr.o: $(SRC)/hdr.c $(SRC)/hdr.h $(SRC)/types.h
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) -c -o $@ $(SRC)/hdr.c
+
 $(OUT)/nenc.o: $(SRC)/nenc.c $(SRC)/types.h $(SRC)/opts.h $(SRC)/db.h
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) -c -o $@ $(SRC)/nenc.c
@@ -91,8 +95,8 @@ $(OUT)/nenc.o: $(SRC)/nenc.c $(SRC)/types.h $(SRC)/opts.h $(SRC)/db.h
 $(BIN)/genkey: $(OUT)/genkey.o
 	$(CC) $(LFLAGS) -o $@ $(OUT)/genkey.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
 
-$(BIN)/nenc: $(OUT)/nenc.o $(OUT)/db.o $(OUT)/opts.o
-	$(CC) $(LFLAGS) -o $@ $(OUT)/nenc.o $(OUT)/db.o $(OUT)/opts.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
+$(BIN)/nenc: $(OUT)/nenc.o $(OUT)/db.o $(OUT)/opts.o $(OUT)/hdr.o
+	$(CC) $(LFLAGS) -o $@ $(OUT)/nenc.o $(OUT)/db.o $(OUT)/opts.o $(OUT)/hdr.o $(LIB)/$(ABI)/*.o -lnacl -lsqlite3
 
 genkey: $(BIN)/genkey
 

@@ -28,7 +28,19 @@ static const char schema[] =
 	"    Id         INTEGER PRIMARY KEY ASC AUTOINCREMENT,\n"
 	"    NameId     INTEGER NOT NULL UNIQUE REFERENCES Names(Id) ON DELETE CASCADE ON UPDATE CASCADE,\n"
 	"    PrivateKey BLOB NOT NULL CHECK ( LENGTH(PrivateKey) = %" PRIu32 " )\n"
-	");";
+	");\n"
+
+	"CREATE TRIGGER IF NOT EXISTS DeleteStaleNamePublicKey\n"
+	"    AFTER DELETE ON PublicKeys FOR EACH ROW\n"
+	"    WHEN OLD.NameId NOT IN ( SELECT NameId FROM PrivateKeys ) BEGIN\n"
+	"        DELETE FROM Names WHERE Names.Id = OLD.NameId;\n"
+    "END;\n"
+	
+	"CREATE TRIGGER IF NOT EXISTS DeleteStaleNamePrivateKey\n"
+	"    AFTER DELETE ON PrivateKeys FOR EACH ROW\n"
+	"    WHEN OLD.NameId NOT IN ( SELECT NameId FROM PrivateKeys ) BEGIN\n"
+	"        DELETE FROM Names WHERE Names.Id = OLD.NameId;\n"
+	"END;\n";
 
 static const char select_pk[] =
 	"SELECT PublicKeys.PublicKey FROM PublicKeys\n"
@@ -106,9 +118,13 @@ static const char delete_pk[] =
 	"    WHERE PublicKeys.NameId IN ( SELECT Names.Id FROM Names\n"
 	"        WHERE Names.Name = ? );";
 
-static const char delete_name[] =
-	"DELETE FROM Names\n"
-	"    WHERE Names.Name = ?;";
+static const char count_pk[] =
+	"SELECT COUNT(*) FROM Names, PublicKeys\n"
+	"    WHERE Names.Name = ? AND Names.Id = PublicKeys.NameId;";
+
+static const char count_sk[] =
+	"SELECT COUNT(*) FROM Names, PrivateKeys\n"
+	"    WHERE Names.Name = ? AND Names.Id = PrivateKeys.NameId;";
 
 static const char schema_failed[]         = "Failed to define schema";
 static const char open_failed[]           = "Failed to open database";
@@ -132,8 +148,9 @@ static const char prepare_update_pk_failed[]   = "Failed to prepare update state
 static const char prepare_update_sk_failed[]   = "Failed to prepare update statement to change private key";
 static const char prepare_delete_pk_failed[]   = "Failed to prepare delete statement to delete public key";
 static const char prepare_delete_sk_failed[]   = "Failed to prepare delete statement to delete private key";
-static const char prepare_delete_name_failed[] = "Failed to prepare delete statement to delete name";
 static const char prepare_select_all_failed[]  = "Failed to prepare select statement to retrieve all key material";
+static const char prepare_count_pk_failed[]    = "Failed to prepare select statement to count public keys by name";
+static const char prepare_count_sk_failed[]    = "Failed to prepare select statement to count private keys by name";
 static const char select_id_failed[]           = "Failed to select id by name";
 static const char insert_name_failed[]         = "Failed to insert name";
 static const char bind_name_id_failed[]        = "Failed to bind name id to insert";
@@ -147,7 +164,6 @@ static const char bind_name_failed[]           = "Failed to bind name to delete 
 static const char begin_failed[]               = "Failed to begin transaction";
 static const char delete_sk_failed[]           = "Failed to delete private key";
 static const char delete_pk_failed[]           = "Failed to delete public key";
-static const char delete_name_failed[]         = "Failed to delete name";
 static const char select_all_failed[]          = "Failed to select all key material";
 
 static enum rc get(const char *restrict name, const char *restrict query, int query_len, struct sk *restrict sk, struct pk *restrict pk);
@@ -587,15 +603,17 @@ enum del_stmt {
 	// Keep sorted by order of allocation
 	DELETE_SK           = 3,
 	DELETE_PK           = 4,
-	DELETE_NAME         = 5,
-	DEL_STATEMENT_COUNT = 6
+	COUNT_SK            = 5,
+	COUNT_PK            = 6,
+	DEL_STATEMENT_COUNT = 7
 };
 
 static enum rc del(const char *restrict name, bool sk, bool pk) {
 	sqlite3_stmt *s[DEL_STATEMENT_COUNT + 1] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	const char *queries[] = {
 		begin_exclusive, commit_transaction, rollback_transaction,
-		delete_sk, delete_pk, delete_name
+		delete_sk, delete_pk,
+		count_sk, count_pk
 	};
 	const int query_lengths[] = {
 		strlen(queries[BEGIN]      ) + sizeof('\0'),
@@ -603,11 +621,13 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 		strlen(queries[ROLLBACK]   ) + sizeof('\0'),
 		strlen(queries[DELETE_SK]  ) + sizeof('\0'),
 		strlen(queries[DELETE_PK]  ) + sizeof('\0'),
-		strlen(queries[DELETE_NAME]) + sizeof('\0')
+		strlen(queries[COUNT_SK]   ) + sizeof('\0'),
+		strlen(queries[COUNT_PK]   ) + sizeof('\0')
 	};
 	const char *msgs[]    = {
 		prepare_begin_failed, prepare_commit_failed, prepare_rollback_failed,
-		prepare_delete_sk_failed, prepare_delete_pk_failed, prepare_delete_name_failed
+		prepare_delete_sk_failed, prepare_delete_pk_failed,
+		prepare_count_sk_failed, prepare_count_pk_failed
 	};
 	enum rc rc = NOT_FOUND;
 	
@@ -640,14 +660,17 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 	sqlite3_stmt *rollback = s[ROLLBACK];
 	sqlite3_stmt *del_sk   = s[DELETE_SK];
 	sqlite3_stmt *del_pk   = s[DELETE_PK];
-	sqlite3_stmt *del_name = s[DELETE_NAME];
+	sqlite3_stmt *cnt_sk   = s[COUNT_SK];
+	sqlite3_stmt *cnt_pk   = s[COUNT_PK];
 
 	if ( sk && sqlite3_bind_text(del_sk, 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
 		explode2(s, bind_name_failed);
 	if ( pk && sqlite3_bind_text(del_pk, 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
 		explode2(s, bind_name_failed);
-	if ( sqlite3_bind_text(del_name, 1, name, strlen(name) + sizeof('\0'), SQLITE_TRANSIENT) != SQLITE_OK )
-		explode2(s, bind_name_failed);	
+	if ( sk && sqlite3_bind_text(cnt_sk, 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
+		explode2(s, bind_name_failed);
+	if ( pk && sqlite3_bind_text(cnt_pk, 1, name, -1, SQLITE_TRANSIENT) != SQLITE_OK )
+		explode2(s, bind_name_failed);
 
 	switch ( sqlite3_step(begin) ) {
 		case SQLITE_DONE:
@@ -670,6 +693,33 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 		default:
 			explode2(s, begin_failed);
 	}
+
+	int n_sk = 0;
+	int n_pk = 0;
+	
+	if ( sk ) {
+		if ( sqlite3_step(cnt_sk) == SQLITE_ROW ) {
+			n_sk = sqlite3_column_int(cnt_sk, 0);
+		} else {
+            explode2(s, count_sk_failed);
+		}
+	}
+
+	if ( pk ) {
+    	if ( sqlite3_step(cnt_pk) == SQLITE_ROW ) {
+			n_pk = sqlite3_column_int(cnt_pk, 0);
+		} else {
+			explode2(s, count_pk_failed);
+		}
+	}
+
+	if ( !opts.force && !((opts.use_private && n_sk) || (opts.use_public  && n_pk) || (opts.use_private && opts.use_public && (n_sk | n_pk))) ) { 
+		if ( sqlite3_step(rollback) != SQLITE_OK )
+			explode2(s, rollback_failed);
+		
+		for ( int i = 0; i < DEL_STATEMENT_COUNT; i++ )
+			sqlite3_finalize(s[i]);
+	}
 	
 	if ( sk && sqlite3_step(del_sk) != SQLITE_DONE ) {
 		sqlite3_step(rollback);
@@ -683,11 +733,6 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 		explode2(s, delete_pk_failed);
 	} else {
 		rc |= PK_DELETED;
-	}
-
-	if ( sqlite3_step(del_name) != SQLITE_DONE ) {
-		sqlite3_step(rollback);
-		explode2(s, delete_name_failed);
 	}
 
 	if ( sqlite3_step(commit) != SQLITE_DONE ) {

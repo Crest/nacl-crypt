@@ -165,10 +165,12 @@ static const char begin_failed[]               = "Failed to begin transaction";
 static const char delete_sk_failed[]           = "Failed to delete private key";
 static const char delete_pk_failed[]           = "Failed to delete public key";
 static const char select_all_failed[]          = "Failed to select all key material";
+static const char count_pk_failed[]            = "Failed to count public keys by name";
+static const char count_sk_failed[]            = "Faield to count private keys by name";
 
 static enum rc get(const char *restrict name, const char *restrict query, int query_len, struct sk *restrict sk, struct pk *restrict pk);
 static enum rc put(const char *restrict name, bool replace, const struct sk *restrict sk, const struct pk *restrict pk);
-static enum rc del(const char *restrict name, bool sk, bool pk);
+static enum rc del(const char *restrict name, bool force, bool sk, bool pk);
 static void explode(sqlite3_stmt *stmt, const char *restrict msg);
 static void explode2(sqlite3_stmt **stmts, const char *restrict msg);
 static void *memcpy_or_zero(void *restrict dst, const void *restrict src, size_t n);
@@ -297,16 +299,16 @@ enum rc put_kp(const char *restrict name, const struct kp *kp) {
 	return put(name, true, &kp->sk, &kp->pk);
 }
 
-enum rc del_pk(const char *restrict name) {
-	return del(name, false, true);
+enum rc del_pk(const char *restrict name, bool force) {
+	return del(name, force, false, true);
 }
 
-enum rc del_sk(const char *restrict name) {
-	return del(name, true, false);
+enum rc del_sk(const char *restrict name, bool force) {
+	return del(name, force, true, false);
 }
 
-enum rc del_kp(const char *restrict name) {
-	return del(name, true, true);
+enum rc del_kp(const char *restrict name, bool force) {
+	return del(name, force, true, true);
 }
 
 static void explode(sqlite3_stmt *stmt, const char *restrict msg) {
@@ -608,7 +610,7 @@ enum del_stmt {
 	DEL_STATEMENT_COUNT = 7
 };
 
-static enum rc del(const char *restrict name, bool sk, bool pk) {
+static enum rc del(const char *restrict name, bool force, bool sk, bool pk) {
 	sqlite3_stmt *s[DEL_STATEMENT_COUNT + 1] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 	const char *queries[] = {
 		begin_exclusive, commit_transaction, rollback_transaction,
@@ -701,7 +703,7 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 		if ( sqlite3_step(cnt_sk) == SQLITE_ROW ) {
 			n_sk = sqlite3_column_int(cnt_sk, 0);
 		} else {
-            explode2(s, count_sk_failed);
+			explode2(s, count_sk_failed);
 		}
 	}
 
@@ -713,22 +715,26 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 		}
 	}
 
-	if ( !opts.force && !((opts.use_private && n_sk) || (opts.use_public  && n_pk) || (opts.use_private && opts.use_public && (n_sk | n_pk))) ) { 
-		if ( sqlite3_step(rollback) != SQLITE_OK )
-			explode2(s, rollback_failed);
-		
-		for ( int i = 0; i < DEL_STATEMENT_COUNT; i++ )
+	if ( !force && !((sk && n_sk) || (pk && n_pk)) ) { 
+		for ( int i = 0; i < DEL_STATEMENT_COUNT; i++ ) if (i != ROLLBACK )
 			sqlite3_finalize(s[i]);
+		
+		if ( sqlite3_step(rollback) != SQLITE_DONE ) {
+			explode2(s, rollback_failed);
+		}
+		sqlite3_finalize(rollback);
+		
+		return NOT_DELETED;
 	}
 	
-	if ( sk && sqlite3_step(del_sk) != SQLITE_DONE ) {
+	if ( n_sk && sqlite3_step(del_sk) != SQLITE_DONE ) {
 		sqlite3_step(rollback);
 		explode2(s, delete_sk_failed);
 	} else {
 		rc |= SK_DELETED;
 	}
 
-	if ( pk && sqlite3_step(del_pk) != SQLITE_DONE ) {
+	if ( n_pk && sqlite3_step(del_pk) != SQLITE_DONE ) {
 		sqlite3_step(rollback);
 		explode2(s, delete_pk_failed);
 	} else {
@@ -741,8 +747,9 @@ static enum rc del(const char *restrict name, bool sk, bool pk) {
 	}
 
 	for ( int i = 0; i < DEL_STATEMENT_COUNT; i++ ) {
-    	sqlite3_finalize(s[i]);
+		sqlite3_finalize(s[i]);
 	}
+        
 	return rc;
 }
 

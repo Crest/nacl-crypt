@@ -618,11 +618,11 @@ static int delete_key() {
 	enum rc rc = NOT_DELETED;
 	
 	if ( opts.use_public && opts.use_private ) {
-    	rc = del_kp(opts.name);
+		rc = del_kp(opts.name, opts.force);
 	} else if ( opts.use_public ) {
-		rc = del_pk(opts.name);
+		rc = del_pk(opts.name, opts.force);
 	} else if ( opts.use_private ) {
-		rc = del_sk(opts.name);
+		rc = del_sk(opts.name, opts.force);
 	}
 	
 	switch ( rc ) {

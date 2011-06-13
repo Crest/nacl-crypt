@@ -24,9 +24,9 @@ enum rc put_pk(const char *restrict name, const struct pk *pk);
 enum rc put_sk(const char *restrict name, const struct sk *sk);
 enum rc put_kp(const char *restrict name, const struct kp *kp);
 
-enum rc del_pk(const char *restrict name);
-enum rc del_sk(const char *restrict name);
-enum rc del_kp(const char *restrict name);
+enum rc del_pk(const char *restrict name, bool force);
+enum rc del_sk(const char *restrict name, bool force);
+enum rc del_kp(const char *restrict name, bool force);
 
 enum rc list_kp(list_f callback);
 

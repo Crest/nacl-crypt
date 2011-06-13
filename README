@@ -2,5 +2,5 @@ This is a little experiement with NaCl and SQLite.
 
 Build with:
 	
-	make env
-	make nenc
+	make all # dynamicly linked binary
+	make all -DSTATIC # staticly linked binary

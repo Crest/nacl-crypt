@@ -1,5 +1,3 @@
-#define _POSIX_C_SOURCE 200809
-
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>

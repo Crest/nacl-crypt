@@ -23,7 +23,7 @@ ABI=`PATH=$(BIN):$${PATH} okabi | head -n 1`
 CWARN+=-Wall -pedantic
 CINC+=-I$(INC) -I$(INC)/$(ABI)
 CLD+=-L$(LIB) -L$(LIB)/$(ABI)
-CFLAGS+=-std=c99 $(CWARN) $(CINC)
+CFLAGS+=-std=c99 $(CWARN) $(CINC) -D_POSIX_C_SOURCE=200809
 LFLAGS+=`[ $(STATIC) ] && echo '-static'` $(CWARN) $(CLD)
 
 

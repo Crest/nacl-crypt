@@ -18,7 +18,8 @@ struct opts opts = {
 static void usage(int argc, char **argv);
 
 char *parse_args(int *argc, char ***argv) {
-	int ch;
+	int   ch;
+	char *env;
 	while ( (ch = getopt(*argc, *argv, "fpPedlg:x:i:r:s:t:")) != -1 ) {
         	switch ( ch ) {
                 	case 'f':
@@ -132,13 +133,16 @@ char *parse_args(int *argc, char ***argv) {
 	if ( opts.op != LIST_KEYS && opts.use_public == false && opts.use_private == false )
 		opts.use_public = true;
 
-	if ( *argc - optind != 1 )
+	env = getenv("NACLCRYPT_DB");
+
+	int left_args = *argc - optind;
+	if ( (!env && left_args != 1) || (env && left_args != 0 && left_args != 1 ) )
 		usage(*argc, *argv);
 	
 	*argc -= optind;
 	*argv += optind;
 	
-	return *argv[0];
+	return *argc == 1 ? *argv[0] : env;
 }
 
 static void usage(int argc, char **argv) {
@@ -150,7 +154,8 @@ static void usage(int argc, char **argv) {
 		"       %s [-f] [-p] [-P] -r <name> <db>\n"
 		"       %s -e -s <name> -t <name> <db>\n"
 		"       %s -d -t <name> -s <name> <db>\n"
-		"       %s [-p] [-P] -l <db>\n",
+		"       %s [-p] [-P] -l <db>\n"
+		"	<db> can be replaced by NACLCRYPT_DB=<db>\n",
 		argv0, argv0, argv0, argv0, argv0, argv0, argv0
 	);
 	exit(64);

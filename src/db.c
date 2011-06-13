@@ -767,27 +767,27 @@ enum rc list_kp(list_f f) {
 				rc = OK;
 				break;
 
-			case SQLITE_ROW: {
-                const unsigned char *const name  = sqlite3_column_text (select, 0);
-				const void          *const p     = sqlite3_column_blob (select, 1);
-				const int                  p_len = sqlite3_column_bytes(select, 1);
-				const void          *const s     = sqlite3_column_blob (select, 2);
-				const int                  s_len = sqlite3_column_bytes(select, 2);
-				      enum rc              found = NOT_FOUND;
-					  struct kp            kp;
+		case SQLITE_ROW: {
+			const unsigned char *const name  = sqlite3_column_text (select, 0);
+			const void          *const p     = sqlite3_column_blob (select, 1);
+			const int                  p_len = sqlite3_column_bytes(select, 1);
+			const void          *const s     = sqlite3_column_blob (select, 2);
+			const int                  s_len = sqlite3_column_bytes(select, 2);
+			      enum rc              found = NOT_FOUND;
+			      struct kp            kp;
 				
-				if ( !name )
-                	explode(select, "Constraint violation (unnamed row).");
+			if ( !name )
+				explode(select, "Constraint violation (unnamed row).");
 
 				if ( !p && !s )
 					explode(select, "Constraint violation (name without any key)");
 
 				if ( p && p_len != crypto_box_PUBLICKEYBYTES ) {
-                	explode(select, "Constraint violation (public key with invalid length).");
+					explode(select, "Constraint violation (public key with invalid length).");
 				}
 
 				if ( s && s_len != crypto_box_SECRETKEYBYTES ) {
-                	explode(select, "Constraint violation (private key with invalid length).");
+					explode(select, "Constraint violation (private key with invalid length).");
 				}
 
 		   		if ( p && s ) {

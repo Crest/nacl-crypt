@@ -62,15 +62,15 @@ $(SQLITE_TMP).compiled: $(SQLITE_TMP)
 	cd $(SQLITE_TMP) && make install
 	touch $@
 
-$(BIN): $(NACL_TMP).compiled
+$(BIN): $(NACL_TMP).compiled $(SQLITE_TMP).compiled
 	mkdir -p $(BIN)
 	cp $(NACL_TMP)/build/$(SHORT_HOSTNAME)/bin/* $(BIN)
 
-$(INC): $(NACL_TMP).compiled
+$(INC): $(NACL_TMP).compiled $(SQLITE_TMP).compiled
 	mkdir -p $(INC)
 	cp -r $(NACL_TMP)/build/$(SHORT_HOSTNAME)/include/* $(INC)
 
-$(LIB): $(NACL_TMP).compiled
+$(LIB): $(NACL_TMP).compiled $(SQLITE_TMP).compiled
 	mkdir -p $(LIB)
 	cp -r $(NACL_TMP)/build/$(SHORT_HOSTNAME)/lib/* $(LIB)
 

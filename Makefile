@@ -28,7 +28,7 @@ LFLAGS+=`[ $(STATIC) ] && echo '-static'` $(CWARN) $(CLD)
 
 
 all:: env nenc
-env:: $(BIN) $(LIB) $(INC)
+env:: $(BIN)/.dummy $(LIB)/.dummy $(INC)/.dummy
 
 hostname::
 	echo $(SHORT_HOSTNAME)
@@ -62,17 +62,20 @@ $(SQLITE_TMP).compiled: $(SQLITE_TMP)
 	cd $(SQLITE_TMP) && make install
 	touch $@
 
-$(BIN): $(NACL_TMP).compiled $(SQLITE_TMP).compiled
+$(BIN)/.dummy: $(NACL_TMP).compiled $(SQLITE_TMP).compiled
 	mkdir -p $(BIN)
 	cp $(NACL_TMP)/build/$(SHORT_HOSTNAME)/bin/* $(BIN)
+	touch $@
 
-$(INC): $(NACL_TMP).compiled $(SQLITE_TMP).compiled
+$(INC)/.dummy: $(NACL_TMP).compiled $(SQLITE_TMP).compiled
 	mkdir -p $(INC)
 	cp -r $(NACL_TMP)/build/$(SHORT_HOSTNAME)/include/* $(INC)
+	touch $@
 
-$(LIB): $(NACL_TMP).compiled $(SQLITE_TMP).compiled
+$(LIB)/.dummy: $(NACL_TMP).compiled $(SQLITE_TMP).compiled
 	mkdir -p $(LIB)
 	cp -r $(NACL_TMP)/build/$(SHORT_HOSTNAME)/lib/* $(LIB)
+	touch $@
 
 $(OUT)/genkey.o: $(SRC)/genkey.c
 	mkdir -p $(OUT)

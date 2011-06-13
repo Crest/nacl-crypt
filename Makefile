@@ -131,6 +131,4 @@ clean:: cleanbin cleanout
 
 cleanall:: clean
 	rm -rf $(TMP) $(INC) $(LIB) $(BIN) $(SHARE) $(OUT)
-	
-foo::
-	echo $(ABI)
+

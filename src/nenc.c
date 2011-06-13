@@ -678,7 +678,7 @@ static enum rc list_callback(enum rc rc, const unsigned char *name, const struct
 		printf("%s\t%s\t%s\n", name, hex.hex_pk.hex_pk, hex.hex_sk.hex_sk);
 	} else if ( p ) {
 		char sk[2*crypto_box_SECRETKEYBYTES+sizeof('\0')];
-    	pk_to_hex(&hex.hex_pk, &kp->pk);
+		pk_to_hex(&hex.hex_pk, &kp->pk);
 		memset(sk, '_', sizeof(sk) - sizeof('\0'));
 		sk[2*crypto_box_SECRETKEYBYTES] = '\0';
 		printf("%s\t%s\t%s\n", name, hex.hex_pk.hex_pk, sk);
@@ -699,7 +699,7 @@ static int list_keys() {
 		case OK:
 			break;
 
-    	case DB_LOCKED:
+		case DB_LOCKED:
 			fprintf(stderr, "Failed to iterate over key material. The database is locked.\n");
 			return 75;
 			break;

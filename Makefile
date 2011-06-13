@@ -35,13 +35,13 @@ hostname::
 
 $(NACL_TMP).tar.bz2:
 	mkdir -p $(TMP)
-	if which fetch; then fetch -o $@ $(NACL_URI); else wget -O $@ $(NACL_URI); fi
-	which -s sha256 && [ `sha256 < $@` = $(NACL_SHA256) ] || which -s openssl && [ `openssl dgst -sha256 < $@ | sed 's/.*=[^a-fA-F0-9]*//'` = $(NACL_SHA256) ] || (echo "$@ is corrupted."; exit 1)
+	if which fetch >/dev/null 2>/dev/null; then fetch -o $@ $(NACL_URI); else wget -O $@ $(NACL_URI); fi
+	which sha256 >/dev/null 2>/dev/null && [ `sha256 < $@` = $(NACL_SHA256) ] || which openssl >/dev/null 2>/dev/null && [ `openssl dgst -sha256 < $@ | sed 's/.*=[^a-fA-F0-9]*//'` = $(NACL_SHA256) ] || (echo "$@ is corrupted."; exit 1)
 
 $(SQLITE_TMP).tar.gz:
 	mkdir -p $(TMP)
-	if which fetch; then fetch -o $@ $(SQLITE_URI); else wget -O $@ $(SQLITE_URI); fi
-	which -s sha256 && [ `sha256 < $@` = $(SQLITE_SHA256) ] || which -s openssl && [ `openssl dgst -sha256 < $@ | sed 's/.*=[^a-fA-F0-9]*//'` = $(SQLITE_SHA256) ] || (echo "$@ is corrupted."; exit 1)
+	if which fetch >/dev/null 2>/dev/null; then fetch -o $@ $(SQLITE_URI); else wget -O $@ $(SQLITE_URI); fi
+	which >/dev/null 2>/dev/null sha256 && [ `sha256 < $@` = $(SQLITE_SHA256) ] || which openssl >/dev/null 2>/dev/null && [ `openssl dgst -sha256 < $@ | sed 's/.*=[^a-fA-F0-9]*//'` = $(SQLITE_SHA256) ] || (echo "$@ is corrupted."; exit 1)
 
 $(NACL_TMP): $(NACL_TMP).tar.bz2
 	bunzip2 < $@.tar.bz2 | tar -x -C $(TMP) -f -

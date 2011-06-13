@@ -3,4 +3,4 @@ This is a little experiement with NaCl and SQLite.
 Build with:
 	
 	make all # dynamicly linked binary
-	make all -DSTATIC # staticly linked binary
+	make all STATIC=1 # staticly linked binary

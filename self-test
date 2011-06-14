@@ -1,0 +1,4 @@
+#!/bin/sh
+
+./bin/nenc -f -g k1 db
+echo foo | ./bin/nenc -e -t k1 -s k1 db | ./bin/nenc -d -t k1 -s k1 db

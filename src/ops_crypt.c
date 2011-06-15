@@ -223,11 +223,16 @@ int decrypt() {
 			return 76;
 		}
 		
-		if ( fwrite(m + crypto_secretbox_ZEROBYTES, j - MAC_LENGTH, 1, stdout) != 1 || ferror(stdout) ) {
-        	fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". Write to standard output failed.\n", opts.source, opts.target);
+		j -= MAC_LENGTH;
+		if ( j != 0 && fwrite(m + crypto_secretbox_ZEROBYTES, j, 1, stdout) != 1 ) {
+			fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". Write to standard output failed.\n", opts.source, opts.target);
 			return 74;
 		}
 
+		if ( ferror(stdout) ) {
+			fprintf(stderr, "Failed to decrypt message from \"%s\" to \"%s\". I/O error on standard output.\n", opts.source, opts.target);
+			return 74;
+		}
 	}
 	
 	return 0;
